@@ -1,0 +1,18 @@
+/* IntelTransform AI - Application-level styles */
+/* All component-level design is handled via Tailwind + index.css */
+
+/* Smooth transitions for page switching */
+main > * {
+  animation: fadeSlideIn 0.25s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
