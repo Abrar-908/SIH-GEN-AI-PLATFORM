@@ -3,17 +3,20 @@ from pydantic import BaseModel
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-ROOT_DIR = BASE_DIR.parent
-DATA_DIR = ROOT_DIR / "data"
+# On Render only backend/ is deployed, so data/exports must live inside it
+DATA_DIR = BASE_DIR / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 SAMPLES_DIR = DATA_DIR / "samples"
-EXPORTS_DIR = ROOT_DIR / "exports"
+EXPORTS_DIR = BASE_DIR / "exports"
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
+
 class Settings(BaseModel):
+    model_config = {"arbitrary_types_allowed": True, "frozen": False}
+
     PROJECT_NAME: str = "IntelTransform AI"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"

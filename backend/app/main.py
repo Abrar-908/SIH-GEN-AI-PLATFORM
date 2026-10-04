@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -25,11 +26,57 @@ logger = logging.getLogger(__name__)
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    db = SessionLocal()
+    try:
+        seed_templates(db)
+        admin = db.query(User).filter(User.username == "analyst").first()
+        if not admin:
+            user = User(
+                username="analyst",
+                email="analyst@inteltransform.ai",
+                full_name="Lead Cyber Intelligence Analyst",
+                role="Analyst",
+                is_active=True
+            )
+            db.add(user)
+            db.commit()
+
+        p_count = db.query(Project).count()
+        if p_count == 0:
+            from app.api.documents import load_sample_document
+            sample_doc_resp = load_sample_document(db)
+            p = Project(
+                name="Cybersecurity Perimeter Breach Incident",
+                description="Simulated lateral intrusion triage and multi-format transformation.",
+                source_document_id=sample_doc_resp.document_id,
+                audience="Executive",
+                tone="Professional",
+                language="English",
+                detail_level="Detailed",
+                objective="Brief",
+                style="Government",
+                selected_outputs=json.dumps(["Executive Summary", "Security Advisory", "Presentation", "LinkedIn Post"]),
+                status="Draft"
+            )
+            db.add(p)
+            db.commit()
+            logger.info("Initialized default sample project for instant SIH demonstration.")
+    except Exception as e:
+        logger.error(f"Startup initialization warning: {e}")
+    finally:
+        db.close()
+    yield  # Application runs here
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Generative AI Platform for Trusted Multi-Format Content Transformation"
+    description="Generative AI Platform for Trusted Multi-Format Content Transformation",
+    lifespan=lifespan
 )
+
 
 # CORS Middleware
 app.add_middleware(
@@ -53,53 +100,7 @@ app.include_router(templates_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(rag_router, prefix="/api")
 
-@app.on_event("startup")
-def on_startup():
-    db = SessionLocal()
-    try:
-        # Seed templates
-        seed_templates(db)
-        
-        # Seed demo user
-        admin = db.query(User).filter(User.username == "analyst").first()
-        if not admin:
-            user = User(
-                username="analyst",
-                email="analyst@inteltransform.ai",
-                full_name="Lead Cyber Intelligence Analyst",
-                role="Analyst",
-                is_active=True
-            )
-            db.add(user)
-            db.commit()
 
-        # Check if we should seed default sample project
-        p_count = db.query(Project).count()
-        if p_count == 0:
-            from app.api.documents import load_sample_document
-            sample_doc_resp = load_sample_document(db)
-            
-            p = Project(
-                name="Cybersecurity Perimeter Breach Incident",
-                description="Simulated lateral intrusion triage and multi-format transformation.",
-                source_document_id=sample_doc_resp.document_id,
-                audience="Executive",
-                tone="Professional",
-                language="English",
-                detail_level="Detailed",
-                objective="Brief",
-                style="Government",
-                selected_outputs=json.dumps(["Executive Summary", "Security Advisory", "Presentation", "LinkedIn Post"]),
-                status="Draft"
-            )
-            db.add(p)
-            db.commit()
-            logger.info("Initialized default sample project for instant SIH demonstration.")
-
-    except Exception as e:
-        logger.error(f"Startup initialization warning: {e}")
-    finally:
-        db.close()
 
 @app.get("/api/health")
 def health_check():

@@ -230,6 +230,7 @@ def load_sample_post(db: Session = Depends(get_db)):
 def load_sample_get(db: Session = Depends(get_db)):
     return load_sample_document(db)
 
+
 @router.get("/{document_id}", response_model=SourceDocumentResponse)
 def get_document(document_id: int, db: Session = Depends(get_db)):
     doc = db.query(SourceDocument).filter(SourceDocument.id == document_id).first()
@@ -278,127 +279,5 @@ def re_extract_document(document_id: int, db: Session = Depends(get_db)):
                 "text": c["text"]
             }
             for c in parse_result.get("chunks", [])
-        ]
-    )
-
-@router.post("/sample/load", response_model=DocumentExtractResponse)
-def load_sample_document(db: Session = Depends(get_db)):
-    """
-    Creates and loads the pre-configured synthetic Cybersecurity Incident Report.
-    Ensures immediate, flawless testing without requiring user file upload.
-    """
-    sample_text = """CYBERSECURITY INCIDENT INVESTIGATION REPORT: SIMULATED ENTERPRISE EXTRUSION
-CLASSIFICATION: TLP:AMBER | RESTRICTED
-INCIDENT ID: CIR-2026-0924-APX
-DATE OF OCCURRENCE: SEPTEMBER 24, 2026
-REPORTING AGENCY: GLOBAL CYBER DEFENSE OPERATIONS CENTER (GCDOC)
-
-1. EXECUTIVE INCIDENT SUMMARY
-At 02:40 UTC on September 24, 2026, the Tier-1 Security Operations Center identified an anomalous lateral authentication burst originating from perimeter edge VPN gateway Node-04 (IP: 194.26.29.114). The threat actor exploited a recently disclosed token authentication vulnerability (CVE-2026-4821) allowing ephemeral session impersonation without secondary token confirmation. Automated heuristics flagged unusual Kerberos ticket requests against internal directory controllers. Containment protocol Delta was invoked at 03:14 UTC, completing host isolation within 72 minutes of confirmation. Forensic audits confirm zero customer financial ledgers or unencrypted PII records were exfiltrated.
-
-2. INCIDENT CHRONOLOGY & TIMELINE
-- 02:40 UTC: Ingress perimeter alarm triggered on VPN Gateway node 04 in Frankfurt.
-- 02:48 UTC: Threat actor attempts living-off-the-land reconnaissance via WMI and encoded PowerShell.
-- 02:58 UTC: Adversary attempts credential extraction on staging database host DB-STG-02.
-- 03:14 UTC: SOC tier-2 analyst triggers air-gap subnet quarantine protocol.
-- 03:30 UTC: Revocation of all active KRBTGT ticket signing keys and Kerberos tokens.
-- 03:52 UTC: Containment achieved across all 4 isolated servers; MTTD: 18 minutes; MTTC: 72 minutes.
-
-3. ATTACK VECTOR & SYSTEM IMPACT
-The threat actor capitalized on boundary firmware unpatched state (version 14.1.2 vs required 14.2.8). In-memory reflective DLL injection was utilized to bypass standard disk heuristics.
-Systems Affected:
-- 4 staging application servers in Frankfurt and Mumbai availability zones.
-- 18 internal operational workstations quarantined for forensic imaging.
-- Secondary business reporting portal suffered 4.2 hours of preventive offline maintenance.
-- Zero immutable financial transaction logs compromised due to hardware-isolated cryptographic enclave.
-
-4. OBSERVED INDICATORS OF COMPROMISE (IoCs)
-- Command & Control IPs: 194.26.29.114, 89.185.85.102
-- Suspicious Domain: update-telemetry.syncdns-cdn[.]com
-- Payload Dropper SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-- Reflective Loader SHA-256: 7d793037a0760186574b0282f2f435e709c6c04d66fa8aaa879d9543f4c71992
-- Mutex: Global\\SyncPerimeter_2026
-
-5. MITIGATION & STRATEGIC RECOMMENDATIONS
-Immediate remediations executed:
-1. Deployed vendor emergency patch KB-994821 across all edge appliances.
-2. Enforced mandatory FIDO2 hardware token MFA for all administrative roles.
-3. Completed double-rotation of KRBTGT domain passwords.
-4. Budget allocation: $42,000 committed for external third-party CIRT certification.
-5. Instituted continuous source-grounded policy verification via IntelTransform AI."""
-
-    sample_path = SAMPLES_DIR / "sample_incident_report.txt"
-    with open(sample_path, "w", encoding="utf-8") as f:
-        f.write(sample_text)
-
-    # Check if already in DB
-    existing = db.query(SourceDocument).filter(SourceDocument.filename == "sample_incident_report.txt").first()
-    if existing:
-        doc_record = existing
-    else:
-        parse_result = DocumentParserService.parse_file(str(sample_path), settings.CHUNK_SIZE, settings.CHUNK_OVERLAP)
-        doc_record = SourceDocument(
-            filename="sample_incident_report.txt",
-            file_type="TXT",
-            file_size=len(sample_text.encode("utf-8")),
-            storage_path=str(sample_path),
-            raw_text=sample_text,
-            page_count=parse_result.get("page_count", 2),
-            title="Cybersecurity Incident Report – Simulated",
-            metadata_json=json.dumps({"headings": parse_result.get("headings", [])})
-        )
-        db.add(doc_record)
-        db.commit()
-        db.refresh(doc_record)
-
-        for c in parse_result.get("chunks", []):
-            chunk_obj = DocumentChunk(
-                document_id=doc_record.id,
-                chunk_index=c["chunk_index"],
-                chunk_id=c["chunk_id"],
-                page_number=c["page_number"],
-                section_name=c["section_name"],
-                text=c["text"],
-                token_count=c["token_count"]
-            )
-            db.add(chunk_obj)
-        db.commit()
-
-    # Re-fetch chunks
-    chunks_list = []
-    for ch in doc_record.chunks:
-        chunks_list.append({
-            "chunk_id": ch.chunk_id,
-            "chunk_index": ch.chunk_index,
-            "page_number": ch.page_number,
-            "section_name": ch.section_name,
-            "text": ch.text,
-            "token_count": ch.token_count
-        })
-
-    vector_store.index_document(doc_record.id, chunks_list)
-
-    AuditService.log(
-        db,
-        action="Document Uploaded",
-        source="sample_incident_report.txt",
-        details="Loaded pre-configured synthetic cybersecurity incident report."
-    )
-
-    return DocumentExtractResponse(
-        document_id=doc_record.id,
-        filename=doc_record.filename,
-        page_count=doc_record.page_count,
-        chunk_count=len(chunks_list),
-        headings=["EXECUTIVE INCIDENT SUMMARY", "INCIDENT CHRONOLOGY & TIMELINE", "ATTACK VECTOR & SYSTEM IMPACT", "INDICATORS OF COMPROMISE (IoCs)", "MITIGATION & RECOMMENDATIONS"],
-        sample_text=(sample_text[:600] + "..."),
-        chunks=[
-            {
-                "chunk_id": c["chunk_id"],
-                "page_number": c["page_number"],
-                "section_name": c["section_name"],
-                "text": c["text"]
-            }
-            for c in chunks_list
         ]
     )
