@@ -84,10 +84,11 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://sih-gen-ai-platform-web.onrender.com",
         "https://sih-gen-ai-platform-2.onrender.com",
-        # Add your Render frontend URL here once deployed, e.g.:
-        # "https://inteltransform-frontend.onrender.com",
+        "https://inteltransform-frontend.onrender.com",
     ],
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -15,6 +15,7 @@ backend/*.db-wal
 backend/.pytest_cache/
 backend/.env
 backend/.env.*
+backend/data/
 backend/data/uploads/*
 backend/data/exports/*
 backend/data/samples/__pycache__/
