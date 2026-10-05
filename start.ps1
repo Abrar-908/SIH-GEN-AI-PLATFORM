@@ -10,7 +10,7 @@ Write-Host ""
 
 # Start Backend (FastAPI)
 Write-Host "[1/2] Starting Backend (FastAPI + uvicorn on :8000)..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; .\venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload" -WindowStyle Normal
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; .\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload" -WindowStyle Normal
 
 Start-Sleep -Seconds 3
 

@@ -14,6 +14,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { DocumentExtractResponse } from '../types';
+import { api } from '../services/api';
 
 interface UploadZoneProps {
   onExtracted: (doc: DocumentExtractResponse) => void;
@@ -39,17 +40,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
     setErrorMsg(null);
     setIsLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/documents/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Upload failed');
-      }
-      const data: DocumentExtractResponse = await res.json();
+      const data = await api.uploadDocument(file);
       onExtracted(data);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error parsing document');

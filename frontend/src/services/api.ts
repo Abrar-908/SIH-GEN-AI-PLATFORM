@@ -61,15 +61,22 @@ export const api = {
   async uploadDocument(file: File): Promise<DocumentExtractResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch(`${API_BASE}/documents/upload`, {
-      method: 'POST',
-      body: formData,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/documents/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch (err: any) {
+      throw new Error(`Cannot reach backend server (${API_BASE}). Please ensure the backend is running.`);
+    }
     if (!res.ok) {
       const err = await safeJson<{ detail?: string }>(res);
-      throw new Error(err?.detail || 'Upload failed');
+      throw new Error(err?.detail || `Upload failed with HTTP status ${res.status}`);
     }
-    return safeJson<DocumentExtractResponse>(res);
+    const data = await safeJson<DocumentExtractResponse>(res);
+    if (!data) throw new Error('Empty response from document extraction server.');
+    return data;
   },
 
   async loadSampleDocument(): Promise<DocumentExtractResponse> {
