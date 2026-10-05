@@ -13,6 +13,42 @@ import {
 
 const API_BASE = `${import.meta.env.VITE_API_URL || ''}/api`;
 
+/** Safe JSON parse — returns null instead of throwing on empty/invalid body */
+async function safeJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text || text.trim() === '') return null as unknown as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error('Invalid JSON from server: ' + text.slice(0, 200));
+  }
+}
+
+/**
+ * Retries a fetch call up to `maxAttempts` times with exponential backoff.
+ * Useful when the backend may still be starting up.
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  maxAttempts = 5,
+  baseDelayMs = 1000
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, attempt - 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 export const api = {
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
@@ -30,18 +66,25 @@ export const api = {
       body: formData,
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Upload failed');
+      const err = await safeJson<{ detail?: string }>(res);
+      throw new Error(err?.detail || 'Upload failed');
     }
-    return res.json();
+    return safeJson<DocumentExtractResponse>(res);
   },
 
   async loadSampleDocument(): Promise<DocumentExtractResponse> {
-    const res = await fetch(`${API_BASE}/documents/sample/load`, {
-      method: 'POST',
-    });
-    if (!res.ok) throw new Error('Failed to load sample document');
-    return res.json();
+    // Use retry — backend may still be booting when the page mounts
+    const res = await fetchWithRetry(
+      `${API_BASE}/documents/sample/load`,
+      { method: 'POST' },
+      5,   // up to 5 attempts
+      1000 // 1 s, 2 s, 4 s, 8 s …
+    );
+    if (!res.ok) {
+      const body = await safeJson<{ detail?: string }>(res);
+      throw new Error(body?.detail || 'Failed to load sample document');
+    }
+    return safeJson<DocumentExtractResponse>(res);
   },
 
   async getDocument(id: number): Promise<SourceDocument> {
@@ -105,10 +148,10 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Transformation failed');
+      const err = await safeJson<{ detail?: string }>(res);
+      throw new Error(err?.detail || 'Transformation failed');
     }
-    return res.json();
+    return safeJson<GeneratedOutput[]>(res);
   },
 
   async getProjectOutputs(projectId: number): Promise<GeneratedOutput[]> {
